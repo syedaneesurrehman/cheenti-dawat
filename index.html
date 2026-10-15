@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Cheenti Dawat</title>
   <meta name="description" content="Ant Feast — a pixel food puzzle with Pakistani dishes.">
-  <meta name="theme-color" content="#24160e">
+  <meta name="theme-color" content="#1c1036">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,6 +13,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Noto+Nastaliq+Urdu:wght@700&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -30,17 +33,24 @@
   <div id="app">
     <section id="home" class="screen">
       <div class="home-top">
-        <h1 class="logo"><span class="ur">چیونٹی کی دعوت</span><span class="en">Cheenti Dawat</span></h1>
-        <p class="tag">Ant Feast · a pixel food puzzle</p>
+        <div class="truck-strip" aria-hidden="true"></div>
+        <h1 class="logo">
+          <span class="ur">چیونٹی کی دعوت</span>
+          <span class="en">Cheenti <em>Dawat</em></span>
+        </h1>
+        <p class="tag">🐜 Ant Feast · a desi pixel food puzzle 🍛</p>
       </div>
-      <canvas id="homeArt" aria-hidden="true"></canvas>
+      <div class="art-frame"><canvas id="homeArt" aria-hidden="true"></canvas></div>
       <div class="home-actions">
-        <button id="playBtn" class="btn primary big">Khelo! <small id="playLvl"></small></button>
-        <button id="levelsBtn" class="btn">All levels</button>
-        <button id="howBtn" class="btn ghost">How to play</button>
+        <button id="playBtn" class="btn primary big"><span>Khelo!</span><small id="playLvl"></small></button>
+        <div class="row">
+          <button id="levelsBtn" class="btn">🍽️ Levels</button>
+          <button id="howBtn" class="btn">❓ How to play</button>
+        </div>
       </div>
       <div class="home-foot">
         <span class="coins">🪙 <b class="coinCount">0</b></span>
+        <span class="starsTotal">⭐ <b id="starCount">0</b></span>
         <button class="btn icon soundBtn" aria-label="Toggle sound">🔊</button>
       </div>
     </section>
@@ -64,17 +74,18 @@
         <span class="coins">🪙 <b class="coinCount">0</b></span>
         <button class="btn icon soundBtn" aria-label="Toggle sound">🔊</button>
       </header>
+      <div id="progress" aria-label="Plate cleared"><i></i><svg class="pant"><use href="#ant"/></svg><b>0%</b></div>
       <div id="boardWrap"><canvas id="board"></canvas><div id="toast"></div></div>
       <div id="thaalRow">
-        <div class="label">Thaal</div>
+        <div class="label">THAAL</div>
         <div id="thaal"></div>
       </div>
       <div id="lanes"></div>
       <div id="boosters">
-        <button class="booster" data-boost="hint"><span>💡</span>Hint <b>25</b></button>
-        <button class="booster" data-boost="undo"><span>↩️</span>Undo <b>40</b></button>
-        <button class="booster" data-boost="slot"><span>➕</span>Slot <b>60</b></button>
-        <button class="booster" data-boost="retry"><span>🔁</span>Retry</button>
+        <button class="booster b-hint" data-boost="hint"><span>💡</span>Hint<b>25</b></button>
+        <button class="booster b-undo" data-boost="undo"><span>↩️</span>Undo<b>40</b></button>
+        <button class="booster b-slot" data-boost="slot"><span>➕</span>Slot<b>60</b></button>
+        <button class="booster b-retry" data-boost="retry"><span>🔁</span>Retry</button>
       </div>
     </section>
 

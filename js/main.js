@@ -24,48 +24,85 @@ const inkFor = (h) => { const [r, g, b] = rgb(h); return (r * 299 + g * 587 + b 
 const mix = (h, t, p) => { const a = rgb(h), b = rgb(t); return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * p)).join(',')})`; };
 
 // ---------- drawing primitives ----------
-function tile(ctx, x, y, s, color, dim) {
-  const g = s > 10 ? 1 : s > 5 ? 0.5 : 0;
-  const r = s * 0.22;
-  ctx.fillStyle = color;
-  if (s > 6 && ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x + g, y + g, s - 2 * g, s - 2 * g, r); ctx.fill(); }
-  else ctx.fillRect(x + g, y + g, s - 2 * g, s - 2 * g);
-  if (s > 6) {
-    const b = Math.max(1, s * 0.13);
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    ctx.fillRect(x + g + r * 0.6, y + g + 1, s - 2 * g - r * 1.2, b);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fillRect(x + g + r * 0.6, y + s - g - b - 0.5, s - 2 * g - r * 1.2, b);
+// Food pieces are glossy, candy-like tiles. Each colour/size is drawn once into a
+// sprite and stamped from then on.
+const sprites = new Map();
+function tileSprite(color, s, dpr) {
+  const key = `${color}|${s}|${dpr}`;
+  let c = sprites.get(key);
+  if (c) return c;
+  const px = Math.ceil(s * dpr);
+  c = document.createElement('canvas');
+  c.width = px; c.height = px;
+  const x = c.getContext('2d');
+  x.scale(dpr, dpr);
+  const g = Math.max(0.5, s * 0.06), r = s * 0.26, w = s - 2 * g;
+  const grad = x.createLinearGradient(0, g, 0, s - g);
+  grad.addColorStop(0, mix(color, '#ffffff', 0.28));
+  grad.addColorStop(0.55, color);
+  grad.addColorStop(1, mix(color, '#000000', 0.28));
+  x.fillStyle = grad;
+  x.beginPath(); x.roundRect(g, g, w, w, r); x.fill();
+  x.lineWidth = Math.max(0.6, s * 0.05);
+  x.strokeStyle = mix(color, '#000000', 0.45);
+  x.stroke();
+  // soft top gloss + a sparkle
+  x.fillStyle = 'rgba(255,255,255,0.32)';
+  x.beginPath(); x.ellipse(s * 0.5, s * 0.3, w * 0.36, s * 0.13, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.85)';
+  x.beginPath(); x.arc(s * 0.3, s * 0.27, Math.max(0.6, s * 0.07), 0, Math.PI * 2); x.fill();
+  sprites.set(key, c);
+  return c;
+}
+
+function tile(ctx, x, y, s, color, dim, dpr = 1) {
+  if (s <= 6 || !ctx.roundRect) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, s - (s > 3 ? 0.5 : 0), s - (s > 3 ? 0.5 : 0));
+    if (s > 3) { ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(x, y, s - 0.5, Math.max(1, s * 0.25)); }
+  } else {
+    ctx.drawImage(tileSprite(color, s, dpr), x, y, s, s);
   }
-  if (dim) { ctx.fillStyle = 'rgba(20,10,4,0.22)'; ctx.fillRect(x + g, y + g, s - 2 * g, s - 2 * g); }
+  if (dim) { ctx.fillStyle = 'rgba(14,8,30,0.30)'; ctx.fillRect(x + 0.5, y + 0.5, s - 1, s - 1); }
 }
 
 function drawAnt(ctx, x, y, ang, s, color, t, carry) {
   ctx.save();
   ctx.translate(x, y);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath(); ctx.ellipse(s * 0.06, s * 0.12, s * 0.5, s * 0.2, ang, 0, Math.PI * 2); ctx.fill();
   ctx.rotate(ang);
-  ctx.strokeStyle = '#170d07';
-  ctx.lineWidth = Math.max(1, s * 0.08);
+  ctx.strokeStyle = '#140a06';
+  ctx.lineWidth = Math.max(1.1, s * 0.085);
   ctx.lineCap = 'round';
   const sw = Math.sin(t * 0.035) * s * 0.14;
   ctx.beginPath();
   for (const [k, side] of [[-1, 1], [0, -1], [1, 1]]) {
     const ox = k * s * 0.13;
-    ctx.moveTo(ox, 0); ctx.lineTo(ox + k * s * 0.12 + sw * side, -s * 0.42);
-    ctx.moveTo(ox, 0); ctx.lineTo(ox + k * s * 0.12 - sw * side, s * 0.42);
+    ctx.moveTo(ox, 0); ctx.lineTo(ox + k * s * 0.14 + sw * side, -s * 0.44);
+    ctx.moveTo(ox, 0); ctx.lineTo(ox + k * s * 0.14 - sw * side, s * 0.44);
   }
-  ctx.moveTo(s * 0.3, -s * 0.05); ctx.lineTo(s * 0.52, -s * 0.2);
-  ctx.moveTo(s * 0.3, s * 0.05); ctx.lineTo(s * 0.52, s * 0.2);
+  // antennae
+  const an = Math.sin(t * 0.02) * s * 0.05;
+  ctx.moveTo(s * 0.33, -s * 0.05); ctx.quadraticCurveTo(s * 0.5, -s * 0.12, s * 0.58, -s * 0.24 + an);
+  ctx.moveTo(s * 0.33, s * 0.05); ctx.quadraticCurveTo(s * 0.5, s * 0.12, s * 0.58, s * 0.24 - an);
   ctx.stroke();
-  ctx.fillStyle = color;
   ctx.lineWidth = Math.max(1, s * 0.06);
-  for (const [cx, rx, ry] of [[-s * 0.3, s * 0.24, s * 0.18], [0, s * 0.13, s * 0.1], [s * 0.25, s * 0.12, s * 0.11]]) {
+  for (const [cx, rx, ry] of [[-s * 0.3, s * 0.25, s * 0.19], [0, s * 0.13, s * 0.1], [s * 0.26, s * 0.13, s * 0.12]]) {
+    const gr = ctx.createRadialGradient(cx - rx * 0.3, -ry * 0.4, 0, cx, 0, rx);
+    gr.addColorStop(0, mix(color, '#ffffff', 0.5));
+    gr.addColorStop(0.6, color);
+    gr.addColorStop(1, mix(color, '#000000', 0.35));
+    ctx.fillStyle = gr;
     ctx.beginPath(); ctx.ellipse(cx, 0, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
+  // eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(s * 0.31, -s * 0.05, s * 0.035, 0, Math.PI * 2); ctx.arc(s * 0.31, s * 0.05, s * 0.035, 0, Math.PI * 2); ctx.fill();
   if (carry) {
     ctx.fillStyle = carry;
-    ctx.fillRect(s * 0.36, -s * 0.13, s * 0.26, s * 0.26);
-    ctx.strokeRect(s * 0.36, -s * 0.13, s * 0.26, s * 0.26);
+    ctx.beginPath(); ctx.roundRect(s * 0.4, -s * 0.15, s * 0.3, s * 0.3, s * 0.06); ctx.fill(); ctx.stroke();
   }
   ctx.restore();
 }
@@ -97,11 +134,48 @@ function updateSoundBtns() { for (const b of $$('.soundBtn')) b.textContent = sa
 
 function maxPlayable() { return Math.max(save.unlocked, 0); }
 
+const home = { def: null, grid: null };
+
 function renderHome() {
   const idx = Math.min(maxPlayable(), levelCount() * 50);
   const def = levelDef(idx);
   $('#playLvl').textContent = `Level ${idx + 1} · ${def.title}${def.remix ? ' (Remix)' : ''}`;
-  drawPicture($('#homeArt'), def, 12);
+  $('#starCount').textContent = Object.values(save.stars).reduce((a, b) => a + b, 0);
+  home.def = def;
+  home.grid = rasterize(def);
+}
+
+// Home screen: the next dish, with a ring of ants marching around it.
+function drawHome(now) {
+  const cv = $('#homeArt');
+  const r = cv.getBoundingClientRect();
+  if (!r.width || !home.def) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const W = Math.round(r.width * dpr);
+  if (cv.width !== W) { cv.width = W; cv.height = W; }
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const S = r.width;
+  c.clearRect(0, 0, S, S);
+  const { w, h, palette } = home.def;
+  const cs = Math.floor((S * 0.66) / Math.max(w, h));
+  const bob = Math.sin(now / 700) * 3;
+  const ox = (S - w * cs) / 2, oy = (S - h * cs) / 2 + bob;
+  c.fillStyle = 'rgba(0,0,0,0.25)';
+  c.beginPath(); c.ellipse(S / 2, S / 2 + (h * cs) / 2 + 10, w * cs * 0.42, 8, 0, 0, Math.PI * 2); c.fill();
+  const g = home.grid;
+  for (let i = 0; i < g.col.length; i++) {
+    if (g.col[i] === EMPTY) continue;
+    tile(c, ox + (i % w) * cs, oy + ((i / w) | 0) * cs, cs, palette[g.col[i]], false, dpr);
+  }
+  const R = S * 0.43, n = 9, t = now / 1000;
+  const ant = Math.max(16, S * 0.075);
+  for (let k = 0; k < n; k++) {
+    const a = t * 0.45 + (k * Math.PI * 2) / n;
+    const x = S / 2 + Math.cos(a) * R, y = S / 2 + Math.sin(a) * R;
+    const col = palette[k % palette.length];
+    drawAnt(c, x, y, a + Math.PI / 2, ant, col, now + k * 90, k % 2 ? col : null);
+  }
 }
 
 function renderLevels() {
@@ -125,7 +199,7 @@ function renderLevels() {
     b.append(c);
     b.insertAdjacentHTML('beforeend',
       `<span class="num">${locked ? '🔒 ' : ''}${i + 1}</span><span class="nm">${def.title}</span>` +
-      `<span class="stars">${'★'.repeat(stars)}${'☆'.repeat(locked ? 0 : 3 - stars)}</span>`);
+      `<span class="stars">${locked ? '' : '★'.repeat(stars) + `<span class="off">${'★'.repeat(3 - stars)}</span>`}</span>`);
     if (!locked) b.onclick = () => { initAudio(); startLevel(i); };
     grid.append(b);
   }
@@ -163,11 +237,11 @@ function vibrate(p) { try { navigator.vibrate?.(p); } catch { /* unsupported */ 
 function rulesHtml() {
   return `<div class="big-icon">🐜</div><h3>How to play</h3>
   <ul class="rules">
-    <li>Ants climb up from their nest <b>under</b> the dastarkhwan. They can only bite the <b>lowest piece</b> left in each column.</li>
-    <li>Tap the colony at the front of a lane. Its ants eat pieces of their own colour, as many as the number says.</li>
-    <li>Each bite can uncover the piece above it, so the order you send colonies matters.</li>
-    <li>Ants that run out of food they can reach wait in the <b>thaal</b>. Tap them later to send them again.</li>
-    <li>If the thaal overflows, the dawat is over. Eat the whole picture to win!</li>
+    <li><i>⬆️</i><span>Ants climb up from their nest <b>under</b> the dastarkhwan. They can only bite the <b>lowest piece</b> left in each column.</span></li>
+    <li><i>👆</i><span>Tap the colony at the front of a lane. Its ants eat pieces of their own colour, as many as the number says.</span></li>
+    <li><i>🧠</i><span>Each bite uncovers the piece above it, so the <b>order</b> you send colonies matters.</span></li>
+    <li><i>🍽️</i><span>Hungry ants with nothing to reach wait in the <b>thaal</b>. Tap them later to send them again.</span></li>
+    <li><i>🏆</i><span>If the thaal overflows, the dawat is over. Clear the whole plate to win!</span></li>
   </ul>`;
 }
 
@@ -217,7 +291,8 @@ function startLevel(idx) {
     b.x0 = Math.min(b.x0, x); b.y0 = Math.min(b.y0, y); b.x1 = Math.max(b.x1, x); b.y1 = Math.max(b.y1, y);
   }
   resetVisual();
-  $('#lvlName').innerHTML = `${idx + 1}. ${G.def.title}${G.def.remix ? ' · Remix' : ''}`;
+  $('#lvlName').innerHTML = `<span class="lv">${idx + 1}</span>${G.def.title}${G.def.remix ? ' · Remix' : ''}`;
+  G.total = G.st.remaining;
   $('#lvlSub').innerHTML = `<span class="ur">${G.def.urdu}</span> · ${G.def.blurb}`;
   show('game');
   closeModal();
@@ -233,6 +308,7 @@ function resetVisual() {
   for (const c of st.lanes.flat()) G.colonies.set(c.id, c);
   for (const c of st.tray) G.colonies.set(c.id, c);
   G.trayVis = st.tray.map((c) => c.id);
+  G.visLeft = st.remaining;
   G.dark = isDark(st.dispatched);
   updateReach(true);
   G.dirty = true; G.uiDirty = true;
@@ -273,11 +349,16 @@ function layout() {
   if (!W || !H) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const { w, h } = G.st;
-  const nest = Math.max(22, Math.min(40, H * 0.08));
-  const cs = Math.max(4, Math.floor(Math.min((W - 12) / w, (H - nest - 8) / h)));
+  // The nest sits at the bottom of the play area, the cloth right on top of it;
+  // any spare height goes above the cloth.
+  const nest = Math.max(34, Math.min(48, H * 0.09));
+  const rim = 13; // ajrak border around the food
+  const cs = Math.max(4, Math.floor(Math.min((W - rim * 2 - 6) / w, (H - nest - rim * 2 - 10) / h)));
   const ox = Math.round((W - w * cs) / 2);
-  const oy = Math.round(Math.max(4, H - nest - h * cs - Math.max(0, (H - nest - h * cs) * 0.5)));
-  G.L = { W, H, dpr, cs, ox, oy, bottom: oy + h * cs, nest };
+  const nestTop = H - nest;
+  const bottom = Math.round(nestTop - rim * 0.5 - 6);
+  const oy = bottom - h * cs;
+  G.L = { W, H, dpr, cs, ox, oy, bottom, nest, rim, nestTop, holeY: nestTop + nest * 0.58 };
   for (const c of [canvas, layer]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
   G.dirty = true;
 }
@@ -291,27 +372,8 @@ function renderLayer() {
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, W, H);
 
-  // dastarkhwan (cloth) behind the food
-  const pad = Math.max(6, cs * 0.6);
-  c.fillStyle = G.dark ? '#120c10' : '#4a2c1c';
-  if (c.roundRect) { c.beginPath(); c.roundRect(ox - pad, oy - pad, st.w * cs + pad * 2, st.h * cs + pad, 14); c.fill(); }
-  c.strokeStyle = G.dark ? '#2a2030' : '#c99a3c';
-  c.lineWidth = 2;
-  c.setLineDash([6, 4]);
-  c.strokeRect(ox - pad / 2, oy - pad / 2, st.w * cs + pad, st.h * cs + pad / 2);
-  c.setLineDash([]);
-
-  // nest soil
-  const g = c.createLinearGradient(0, bottom, 0, H);
-  g.addColorStop(0, G.dark ? '#0d0a08' : '#3b2414');
-  g.addColorStop(1, G.dark ? '#050404' : '#1f120a');
-  c.fillStyle = g;
-  c.fillRect(0, bottom + 2, W, H - bottom);
-  c.fillStyle = G.dark ? '#ffffff08' : '#ffffff10';
-  for (let k = 0; k < 40; k++) {
-    const x = ((k * 97.3) % W), y = bottom + 6 + ((k * 37.7) % Math.max(4, H - bottom - 8));
-    c.fillRect(x, y, 2, 2);
-  }
+  drawCloth(c, G.L, st.w, st.h, G.dark);
+  drawNest(c, G.L, G.dark);
 
   // food
   for (let i = 0; i < v.col.length; i++) {
@@ -319,49 +381,146 @@ function renderLayer() {
     if (col === EMPTY) continue;
     const x = ox + (i % st.w) * cs, y = oy + ((i / st.w) | 0) * cs;
     if (isLocked(st, i)) {
-      tile(c, x, y, cs, '#8b97a3');
-      if (cs > 9) { c.fillStyle = '#5d6a75'; c.fillRect(x + cs / 2 - 1, y + cs / 2 - 1, 2, 2); }
+      tile(c, x, y, cs, '#9aa8b5', false, dpr);
       continue;
     }
     const reach = G.reach[i];
     if (G.dark && !reach) {
-      c.fillStyle = mix(pal[col], '#0b0710', 0.9);
+      c.fillStyle = mix(pal[col], '#07051a', 0.88);
       c.fillRect(x + 0.5, y + 0.5, cs - 1, cs - 1);
       continue;
     }
     const hidden = G.level.hidden[i] && !v.revealed[i];
-    tile(c, x, y, cs, hidden ? '#5a4a6e' : pal[col], !reach);
+    tile(c, x, y, cs, hidden ? '#6b4f8f' : pal[col], !reach, dpr);
     if (hidden && cs >= 11) {
-      c.fillStyle = '#d9c8f5';
-      c.font = `900 ${Math.floor(cs * 0.7)}px system-ui, sans-serif`;
+      c.fillStyle = '#f3e8ff';
+      c.font = `800 ${Math.floor(cs * 0.72)}px "Baloo 2", system-ui, sans-serif`;
       c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText('?', x + cs / 2, y + cs / 2 + 1);
+      c.fillText('?', x + cs / 2, y + cs / 2 + cs * 0.08);
     }
     if (v.hp[i] > 1) {
-      c.fillStyle = 'rgba(205,238,255,0.55)';
-      c.fillRect(x + 1, y + 1, cs - 2, cs - 2);
-      c.strokeStyle = 'rgba(255,255,255,0.9)';
-      c.lineWidth = Math.max(1, cs * 0.08);
-      c.beginPath(); c.moveTo(x + cs * 0.25, y + cs * 0.65); c.lineTo(x + cs * 0.6, y + cs * 0.25); c.stroke();
+      c.fillStyle = 'rgba(200,240,255,0.5)';
+      c.beginPath(); c.roundRect(x + 1, y + 1, cs - 2, cs - 2, cs * 0.22); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.95)';
+      c.lineWidth = Math.max(1, cs * 0.09);
+      c.beginPath();
+      c.moveTo(x + cs * 0.22, y + cs * 0.7); c.lineTo(x + cs * 0.55, y + cs * 0.28);
+      c.moveTo(x + cs * 0.5, y + cs * 0.75); c.lineTo(x + cs * 0.75, y + cs * 0.45);
+      c.stroke();
     }
   }
 
-  // tiffin lids
+  // tiffin lids: a steel lid with a latch and the countdown
   for (let k = 0; k < st.locks.length; k++) {
     if (st.locks[k] <= 0) continue;
     const b = G.lockBox[k];
     if (b.x1 < 0) continue;
     const x = ox + b.x0 * cs, y = oy + b.y0 * cs, w = (b.x1 - b.x0 + 1) * cs, h = (b.y1 - b.y0 + 1) * cs;
-    c.strokeStyle = '#dfe6ec'; c.lineWidth = 2;
-    c.strokeRect(x + 1, y + 1, w - 2, h - 2);
-    const r = Math.max(12, Math.min(22, Math.min(w, h) * 0.32));
-    c.fillStyle = '#26323c';
-    c.beginPath(); c.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = '#ffc23d'; c.stroke();
+    const lg = c.createLinearGradient(x, y, x + w, y + h);
+    lg.addColorStop(0, 'rgba(255,255,255,0.25)'); lg.addColorStop(0.5, 'rgba(255,255,255,0)'); lg.addColorStop(1, 'rgba(255,255,255,0.18)');
+    c.fillStyle = lg;
+    c.beginPath(); c.roundRect(x, y, w, h, 6); c.fill();
+    c.strokeStyle = '#e8eef3'; c.lineWidth = 2.5; c.stroke();
+    const r = Math.max(13, Math.min(24, Math.min(w, h) * 0.34));
+    const cx = x + w / 2, cy = y + h / 2;
+    c.fillStyle = 'rgba(0,0,0,0.3)';
+    c.beginPath(); c.arc(cx, cy + 3, r, 0, Math.PI * 2); c.fill();
+    const bg = c.createRadialGradient(cx - r * 0.3, cy - r * 0.4, 1, cx, cy, r);
+    bg.addColorStop(0, '#5b6e80'); bg.addColorStop(1, '#1f2a36');
+    c.fillStyle = bg;
+    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#ffcc29'; c.lineWidth = 3; c.stroke();
     c.fillStyle = '#fff';
-    c.font = `900 ${Math.floor(r * 1.05)}px system-ui, sans-serif`;
+    c.font = `800 ${Math.floor(r * 1.15)}px "Baloo 2", system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(st.locks[k]), x + w / 2, y + h / 2 + 1);
+    c.fillText(String(st.locks[k]), cx, cy + r * 0.1);
+  }
+}
+
+// Ajrak-style block-print dastarkhwan: crimson border of stars and diamonds, indigo field.
+function drawCloth(c, L, w, h, dark) {
+  const { cs, ox, oy, rim } = L;
+  const x0 = ox - rim, y0 = oy - rim, bw = w * cs + rim * 2, bh = h * cs + rim + 4;
+  c.save();
+  c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 18; c.shadowOffsetY = 8;
+  c.fillStyle = dark ? '#1a0812' : '#9b1b30';
+  c.beginPath(); c.roundRect(x0, y0, bw, bh, 16); c.fill();
+  c.restore();
+  // indigo field with a faint star grid
+  c.fillStyle = dark ? '#06061a' : '#1b1d55';
+  c.beginPath(); c.roundRect(ox - 3, oy - 3, w * cs + 6, h * cs + 6, 8); c.fill();
+  if (!dark) {
+    c.fillStyle = 'rgba(255,255,255,0.06)';
+    const step = Math.max(10, cs * 2);
+    for (let yy = oy + step / 2; yy < oy + h * cs; yy += step) {
+      for (let xx = ox + step / 2; xx < ox + w * cs; xx += step) {
+        c.beginPath(); c.arc(xx, yy, 1.4, 0, Math.PI * 2); c.fill();
+      }
+    }
+  }
+  // border motifs
+  c.strokeStyle = dark ? '#3a1a28' : 'rgba(255,240,220,0.85)';
+  c.lineWidth = 1.2;
+  c.beginPath(); c.roundRect(x0 + 3, y0 + 3, bw - 6, bh - 6, 13); c.stroke();
+  c.beginPath(); c.roundRect(ox - 4.5, oy - 4.5, w * cs + 9, h * cs + 9, 9); c.stroke();
+  const mid = rim / 2 + 1.5;
+  const motif = (x, y, k) => {
+    if (k % 2) {
+      c.fillStyle = dark ? '#2a1020' : '#fff3df';
+      c.beginPath(); c.moveTo(x, y - 3.2); c.lineTo(x + 3.2, y); c.lineTo(x, y + 3.2); c.lineTo(x - 3.2, y); c.closePath(); c.fill();
+    } else {
+      c.fillStyle = dark ? '#140818' : '#1b1d55';
+      c.beginPath(); c.arc(x, y, 2.4, 0, Math.PI * 2); c.fill();
+    }
+  };
+  const gap = 9;
+  let k = 0;
+  for (let x = x0 + 14; x < x0 + bw - 12; x += gap) { motif(x, y0 + mid, k); motif(x, y0 + bh - mid, k + 1); k++; }
+  k = 0;
+  for (let y = y0 + 14; y < y0 + bh - 12; y += gap) { motif(x0 + mid, y, k); motif(x0 + bw - mid, y, k + 1); k++; }
+}
+
+// The ants' home: a soil bank with grass on top and one hole under each lane.
+function drawNest(c, L, dark) {
+  const { W, H } = L;
+  const top = L.nestTop - 4;
+  const g = c.createLinearGradient(0, top, 0, H);
+  g.addColorStop(0, dark ? '#140c08' : '#7a4a26');
+  g.addColorStop(1, dark ? '#050302' : '#3d2210');
+  c.fillStyle = g;
+  c.beginPath();
+  c.moveTo(0, H);
+  c.lineTo(0, top + 8);
+  for (let x = 0; x <= W; x += 12) c.lineTo(x, top + 4 + Math.sin(x * 0.09) * 3);
+  c.lineTo(W, H);
+  c.closePath();
+  c.fill();
+  // pebbles
+  for (let k = 0; k < 34; k++) {
+    const x = (k * 97.3) % W, y = top + 10 + ((k * 37.7) % Math.max(6, H - top - 14));
+    c.fillStyle = dark ? 'rgba(255,255,255,0.04)' : k % 3 ? 'rgba(255,220,180,0.16)' : 'rgba(0,0,0,0.2)';
+    c.beginPath(); c.ellipse(x, y, 2.2, 1.5, 0, 0, Math.PI * 2); c.fill();
+  }
+  // grass tufts
+  if (!dark) {
+    c.strokeStyle = '#3fbf5a'; c.lineWidth = 1.6; c.lineCap = 'round';
+    c.beginPath();
+    for (let x = 6; x < W; x += 17) {
+      const y = top + 4 + Math.sin(x * 0.09) * 3;
+      c.moveTo(x, y); c.lineTo(x - 3, y - 6);
+      c.moveTo(x + 2, y); c.lineTo(x + 3, y - 8);
+      c.moveTo(x + 4, y); c.lineTo(x + 8, y - 5);
+    }
+    c.stroke();
+  }
+  // a hole under each lane
+  for (const el of $$('.lane')) {
+    const x = originX({ origin: { lane: Number(el.dataset.lane) } });
+    const y = L.holeY;
+    c.fillStyle = dark ? '#1c120c' : '#a8703f';
+    c.beginPath(); c.ellipse(x, y + 2, 17, 8, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#120a05';
+    c.beginPath(); c.ellipse(x, y + 1, 11, 5, 0, 0, Math.PI * 2); c.fill();
   }
 }
 
@@ -377,11 +536,11 @@ function originX(b) {
 }
 
 function spawnAnt(b) {
-  const { cs, ox, oy, bottom, H } = G.L;
+  const { cs, ox, oy, bottom, holeY } = G.L;
   const cx = ox + (b.i % G.st.w) * cs + cs / 2;
   const cy = oy + ((b.i / G.st.w) | 0) * cs + cs / 2;
-  const sx = originX(b) + (Math.random() - 0.5) * 16;
-  const path = [[sx, H + 12], [cx, bottom + Math.min(14, G.L.nest * 0.4)], [cx, cy]];
+  const sx = originX(b) + (Math.random() - 0.5) * 10;
+  const path = [[sx, holeY + 2], [cx, bottom + 8], [cx, cy]];
   G.ants.push({ path, seg: 0, x: path[0][0], y: path[0][1], ang: -Math.PI / 2, bite: b, phase: 'go', t: 0, carry: null, life: 0 });
   const p = (G.pending.get(b.cid) || 1) - 1;
   if (p > 0) G.pending.set(b.cid, p); else G.pending.delete(b.cid);
@@ -397,6 +556,9 @@ function biteLands(a) {
     sfx.crack();
   } else {
     v.col[b.i] = EMPTY;
+    G.visLeft--;
+    G.uiDirty = true;
+    if (Math.random() < 0.5) G.parts.push({ ...particle(x, y, '#ffffff'), star: true, life: 0.5 });
     G.dying.push({ i: b.i, color: G.level.palette[b.color], t: 0, hidden: G.level.hidden[b.i] && !v.revealed[b.i] });
     for (let k = 0; k < 3; k++) G.parts.push(particle(x, y, G.level.palette[b.color]));
     a.carry = G.level.palette[b.color];
@@ -551,14 +713,18 @@ function win() {
   persist(); updateCoins();
   sfx.win(); vibrate([20, 40, 20, 40, 60]);
   G.confetti = 1;
-  const starHtml = [0, 1, 2].map((k) => (k < stars ? '★' : '<span class="off">★</span>')).join('');
+  const starHtml = [0, 1, 2].map((k) => `<span class="${k < stars ? '' : 'off'}">★</span>`).join('');
   const note = stars === 3 ? 'Perfect dawat: no boosters and almost no waiting.'
     : stars === 2 ? 'For ★★★ keep at most one colony waiting in the thaal.' : 'For more stars, finish without boosters.';
-  modal(`<div class="stars">${starHtml}</div><h3>Shabash!</h3><p><b>${G.def.title}</b> khatam! Your colonies cleaned the plate.</p><p>🪙 +${reward} · ${note}</p>`, [
+  const title = stars === 3 ? 'Zabardast!' : stars === 2 ? 'Shabash!' : 'Wah bhai!';
+  modal(`<div class="stars">${starHtml}</div><h3>${title}</h3><canvas class="winpic"></canvas>` +
+    `<p><b>${G.def.title}</b> <span class="ur">${G.def.urdu}</span> khatam! Your colonies cleaned the plate.</p>` +
+    `<div class="reward">🪙 +${reward}</div><p style="font-size:13.5px;opacity:.85">${note}</p>`, [
     { label: 'Agla level ›', cls: 'primary big', onClick: () => startLevel(G.idx + 1) },
     { label: 'Play again', onClick: () => startLevel(G.idx) },
     { label: 'All levels', cls: 'ghost', onClick: () => show('levels') },
   ]);
+  drawPicture($('#modal .winpic'), G.def, Math.max(4, Math.floor(300 / Math.max(G.def.w, G.def.h))));
 }
 
 function lose() {
@@ -606,6 +772,12 @@ function renderUI() {
   }
   $('#thaal').innerHTML = html;
 
+  const pct = G.total ? Math.round(((G.total - G.visLeft) / G.total) * 100) : 0;
+  const bar = $('#progress');
+  $('i', bar).style.width = `${pct}%`;
+  $('.pant', bar).style.left = `max(-4px, calc(${pct}% - 16px))`;
+  $('b', bar).textContent = `${pct}%`;
+
   for (const b of $$('.booster')) {
     const k = b.dataset.boost;
     b.disabled = k !== 'retry' && save.coins < COST[k];
@@ -639,11 +811,11 @@ function frame(now) {
     } else G.spawnAcc = 0;
     stepAnts(dt);
     if (G.hint && now > G.hintUntil) { G.hint = null; G.uiDirty = true; }
+    if (G.uiDirty) { G.uiDirty = false; renderUI(); }
     if (G.dirty) { renderLayer(); G.dirty = false; }
     draw(dt, now);
     checkEnd();
-  }
-  if (G.uiDirty && G.st) { G.uiDirty = false; renderUI(); }
+  } else if (!$('#home').hidden) drawHome(now);
   requestAnimationFrame(frame);
 }
 
@@ -659,41 +831,59 @@ function draw(dt, now) {
     d.t += dt;
     const k = Math.max(0, 1 - d.t / 0.18), s = cs * k;
     const x = ox + (d.i % G.st.w) * cs + (cs - s) / 2, y = oy + ((d.i / G.st.w) | 0) * cs + (cs - s) / 2;
-    if (s > 1) tile(ctx, x, y, s, d.hidden ? '#5a4a6e' : d.color);
+    if (s > 1) tile(ctx, x, y, s, d.hidden ? '#6b4f8f' : d.color, false, dpr);
   }
   G.dying = G.dying.filter((d) => d.t < 0.18);
 
-  const antSize = Math.max(9, Math.min(18, cs * 1.15));
+  const antSize = Math.max(11, Math.min(22, cs * 1.4));
   for (const a of G.ants) {
-    const fade = a.phase === 'back' && a.seg >= 1 ? Math.max(0.15, 1 - (a.y - G.L.bottom) / (H - G.L.bottom + 12)) : 1;
+    // ants pop out of the hole and sink back into it
+    let fade = 1;
+    const dHole = Math.hypot(a.x - a.path[a.phase === 'back' ? a.path.length - 1 : 0][0], a.y - G.L.holeY);
+    if (dHole < 14) fade = Math.max(0.1, dHole / 14);
     ctx.globalAlpha = fade;
     drawAnt(ctx, a.x, a.y, a.ang, antSize, G.level.palette[a.bite.color], a.life, a.carry);
   }
   ctx.globalAlpha = 1;
 
   for (const p of G.parts) {
-    p.t += dt; p.vy += 260 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-    ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+    p.t += dt; p.vy += (p.star ? 60 : 260) * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    const k = Math.max(0, 1 - p.t / p.life);
+    ctx.globalAlpha = k;
     ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    if (p.star) {
+      const r = 2 + 3 * k;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - r); ctx.lineTo(p.x + r * 0.3, p.y - r * 0.3); ctx.lineTo(p.x + r, p.y); ctx.lineTo(p.x + r * 0.3, p.y + r * 0.3);
+      ctx.lineTo(p.x, p.y + r); ctx.lineTo(p.x - r * 0.3, p.y + r * 0.3); ctx.lineTo(p.x - r, p.y); ctx.lineTo(p.x - r * 0.3, p.y - r * 0.3);
+      ctx.closePath(); ctx.fill();
+    } else ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
   }
   ctx.globalAlpha = 1;
   G.parts = G.parts.filter((p) => p.t < p.life);
 
   for (const f of G.floats) {
     f.t += dt;
-    const k = f.t / 1.1;
-    ctx.globalAlpha = Math.max(0, 1 - k * k);
-    ctx.font = `900 ${Math.round(28 + 10 * Math.min(1, f.t * 6))}px "Trebuchet MS", system-ui, sans-serif`;
+    const k = f.t / 1.2;
+    const pop = Math.min(1, f.t * 7);
+    ctx.globalAlpha = Math.max(0, 1 - k * k * k);
+    ctx.save();
+    ctx.translate(W / 2, H * 0.32 - k * 36);
+    ctx.rotate(-0.06);
+    ctx.scale(0.6 + 0.4 * pop + (pop < 1 ? 0 : Math.sin(f.t * 12) * 0.02), 0.6 + 0.4 * pop);
+    ctx.font = `800 40px "Baloo 2", system-ui, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 6; ctx.strokeStyle = '#3a1d08';
-    const y = H * 0.35 - k * 40;
-    ctx.strokeText(f.text, W / 2, y);
-    ctx.fillStyle = '#ffc23d';
-    ctx.fillText(f.text, W / 2, y);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 10; ctx.strokeStyle = '#5a0f2e'; ctx.strokeText(f.text, 0, 4);
+    ctx.lineWidth = 7; ctx.strokeStyle = '#e8332a'; ctx.strokeText(f.text, 0, 0);
+    const tg = ctx.createLinearGradient(0, -18, 0, 18);
+    tg.addColorStop(0, '#fff6b0'); tg.addColorStop(1, '#ffb800');
+    ctx.fillStyle = tg;
+    ctx.fillText(f.text, 0, 0);
+    ctx.restore();
   }
   ctx.globalAlpha = 1;
-  G.floats = G.floats.filter((f) => f.t < 1.1);
+  G.floats = G.floats.filter((f) => f.t < 1.2);
 
   if (G.dark) {
     const g = ctx.createRadialGradient(W / 2, H, 10, W / 2, H, Math.max(W, H));
@@ -705,7 +895,7 @@ function draw(dt, now) {
 
   if (G.confetti > 0) {
     G.confetti += dt;
-    const cols = ['#12a150', '#ffffff', '#ffc23d', '#e5483b', '#1e88e5'];
+    const cols = ['#19b36b', '#ffffff', '#ffcc29', '#e8332a', '#2bb3ff', '#ff3d7f'];
     for (let k = 0; k < 70; k++) {
       const seed = k * 12.9898;
       const x = (Math.sin(seed) * 0.5 + 0.5) * W + Math.sin(now / 400 + k) * 12;
