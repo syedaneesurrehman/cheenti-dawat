@@ -1,0 +1,11 @@
+{
+  "name": "cheenti-dawat",
+  "private": true,
+  "type": "module",
+  "description": "Cheenti Dawat (Ant Feast): a pixel food puzzle PWA with Pakistani dishes.",
+  "scripts": {
+    "start": "node serve.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "verify": "node tools/verify.mjs"
+  }
+}
